@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1804,8 +1805,8 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  // ===========================================================================
-  // TAB 4: VAULT (No top bar, Load Sample removed, Clear All with Confirmation)
+// ===========================================================================
+  // TAB 4: VAULT (File Picker Import & Direct File Export)
   // ===========================================================================
   Widget _buildVaultTab() {
     final String currentJson = jsonEncode({
@@ -1842,24 +1843,42 @@ class _MainScreenState extends State<MainScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _vaultButton('Export JSON', () {
-                      Clipboard.setData(ClipboardData(text: currentJson));
-                      _rawJsonCtrl.text = currentJson;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Backup JSON exported & copied to clipboard!')),
-                      );
+                    child: _vaultButton('Export JSON File', () async {
+                      try {
+                        String? outputFile = await FilePicker.platform.saveFile(
+                          dialogTitle: 'Save Dishfolio Backup',
+                          fileName: 'dishfolio_backup_${DateTime.now().millisecondsSinceEpoch}.json',
+                          bytes: utf8.encode(currentJson),
+                        );
+                        if (outputFile != null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Backup JSON saved successfully!')),
+                          );
+                        }
+                      } catch (e) {
+                        Clipboard.setData(ClipboardData(text: currentJson));
+                        _rawJsonCtrl.text = currentJson;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Backup copied to clipboard (File save unsupported here).')),
+                        );
+                      }
                     }),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _vaultButton('Import JSON', () async {
-                      final data = await Clipboard.getData('text/plain');
-                      if (data?.text != null && data!.text!.trim().isNotEmpty) {
-                        _rawJsonCtrl.text = data.text!;
-                        _restoreFromJsonString(data.text!);
-                      } else {
+                    child: _vaultButton('Import JSON File', () async {
+                      try {
+                        FilePickerResult? result = await FilePicker.platform.pickFiles(
+                          type: FileType.custom,
+                          allowedExtensions: ['json'],
+                        );
+                        if (result != null && result.files.single.bytes != null) {
+                          final jsonString = utf8.decode(result.files.single.bytes!);
+                          _restoreFromJsonString(jsonString);
+                        }
+                      } catch (e) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Paste JSON into Raw JSON box first.')),
+                          const SnackBar(content: Text('Could not open file picker.')),
                         );
                       }
                     }),
@@ -1931,18 +1950,18 @@ class _MainScreenState extends State<MainScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _vaultButton('Copy', () {
+                    child: _vaultButton('Copy Text', () {
                       final textToCopy =
                           _rawJsonCtrl.text.trim().isEmpty ? currentJson : _rawJsonCtrl.text;
                       Clipboard.setData(ClipboardData(text: textToCopy));
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Copied to clipboard!')),
+                        const SnackBar(content: Text('Copied JSON text to clipboard!')),
                       );
                     }),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: _vaultButton('Restore', () {
+                    child: _vaultButton('Restore Text', () {
                       _restoreFromJsonString(_rawJsonCtrl.text);
                     }),
                   ),
@@ -1958,10 +1977,10 @@ class _MainScreenState extends State<MainScreen> {
                 ),
                 child: TextField(
                   controller: _rawJsonCtrl,
-                  maxLines: 5,
+                  maxLines: 4,
                   style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.white),
                   decoration: const InputDecoration(
-                    hintText: 'Paste JSON here...',
+                    hintText: 'Paste JSON text here...',
                     hintStyle: TextStyle(color: Color(0xFF555555), fontSize: 12),
                     border: InputBorder.none,
                   ),
@@ -1972,7 +1991,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Data Card (Load Sample removed, ONLY Clear All with confirmation dialog)
+        // Data Card (Clear All)
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
@@ -2015,93 +2034,6 @@ class _MainScreenState extends State<MainScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _vaultButton(String label, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: const Color(0xFF121212),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0xFF262626)),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white),
-        ),
-      ),
-    );
-  }
-
-  void _restoreFromJsonString(String raw) {
-    try {
-      final parsed = jsonDecode(raw);
-      final incomingVisits = List<Map<String, dynamic>>.from(parsed['visits'] ?? []);
-      final incomingPlaces = List<Map<String, dynamic>>.from(parsed['places'] ?? parsed['wantToGo'] ?? []);
-
-      setState(() {
-        if (_importMode == 'Replace') {
-          _visits = incomingVisits;
-          _places = incomingPlaces;
-        } else {
-          _visits.addAll(incomingVisits);
-          _places.addAll(incomingPlaces);
-        }
-        _syncPlacesFromVisits();
-        _saveData();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Data restored successfully!')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid JSON format.')),
-      );
-    }
-  }
-
-  void _confirmClearAllDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF0A0A0A),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-          side: const BorderSide(color: Color(0xFF262626)),
-        ),
-        title: const Text('Are you sure?', style: TextStyle(color: Colors.white, fontSize: 17)),
-        content: const Text(
-          'This will permanently delete all your logged visits, dishes, and Want to Go places.',
-          style: TextStyle(color: Color(0xFF999999), fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFF888888))),
-          ),
-          TextButton(
-            onPressed: () {
-              setState(() {
-                _visits.clear();
-                _places.clear();
-                _saveData();
-              });
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('All data cleared.')),
-              );
-            },
-            child: const Text(
-              'Yes, Clear All',
-              style: TextStyle(color: Color(0xFFFF5555), fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
