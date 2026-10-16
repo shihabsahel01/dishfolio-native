@@ -3171,4 +3171,106 @@ class _MainScreenState extends State<MainScreen> {
       ),
     );
   }
+// Helper widget for Vault buttons
+  Widget _vaultButton(String label, VoidCallback onPressed) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF161616),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: Color(0xFF2A2A2A)),
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        ),
+      ),
+    );
+  }
+
+  // Helper to restore state from a JSON string with merge/replace support
+  void _restoreFromJsonString(String jsonStr) {
+    try {
+      final decoded = jsonDecode(jsonStr);
+      if (decoded is Map<String, dynamic>) {
+        final List<dynamic> loadedVisits = decoded['visits'] ?? [];
+        final List<dynamic> loadedPlaces = decoded['places'] ?? [];
+
+        setState(() {
+          if (_importMode == 'Replace') {
+            _visits = loadedVisits.map((v) => Map<String, dynamic>.from(v)).toList();
+            _places = loadedPlaces.map((p) => Map<String, dynamic>.from(p)).toList();
+          } else {
+            // Merge mode
+            for (var v in loadedVisits) {
+              if (!_visits.any((existing) => existing['id'] == v['id'])) {
+                _visits.add(Map<String, dynamic>.from(v));
+              }
+            }
+            for (var p in loadedPlaces) {
+              if (!_places.any((existing) => existing['id'] == p['id'])) {
+                _places.add(Map<String, dynamic>.from(p));
+              }
+            }
+          }
+          _saveData();
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Data restored successfully!')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: Invalid JSON format.')),
+      );
+    }
+  }
+
+  // Helper dialog to confirm clearing all data
+  void _confirmClearAllDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF111111),
+        title: const Text('Clear All Data?', style: TextStyle(color: Colors.white, fontSize: 16)),
+        content: const Text(
+          'This will permanently delete all your logged visits and custom places. Make sure you have a backup!',
+          style: TextStyle(color: Color(0xFFAAAAAA), fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel', style: TextStyle(color: Colors.white)),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                _visits.clear();
+                _places.clear();
+                _saveData();
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('All data cleared.')),
+              );
+            },
+            child: const Text('Clear Everything', style: TextStyle(color: Color(0xFFFF5555))),
+          ),
+        ],
+      ),
+    );
+  }
+
+
+
+
+
 }
