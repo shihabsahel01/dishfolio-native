@@ -1,9 +1,12 @@
-name: Build Native Dishfolio APK
+name: Build & Release Native Dishfolio APK
 
 on:
   push:
     branches: [ "main" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -28,9 +31,18 @@ jobs:
           flutter create --platforms=android --org com.shihab --project-name dishfolio .
           flutter pub get
           flutter build apk --release --split-per-abi
+          mv build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/app/outputs/flutter-apk/Dishfolio-v2.${{ github.run_number }}.apk
 
-      - name: Upload Ready-to-Install APK
+      - name: Upload Ready-to-Install APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Dishfolio-Native-APK
-          path: build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+          path: build/app/outputs/flutter-apk/Dishfolio-v2.${{ github.run_number }}.apk
+
+      - name: Publish Official GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.${{ github.run_number }}
+          name: Dishfolio v2.${{ github.run_number }}
+          body: "Automated native Android release build #${{ github.run_number }} featuring unified restaurant cards, menu photo galleries, monochrome stars, and analytics."
+          files: build/app/outputs/flutter-apk/Dishfolio-v2.${{ github.run_number }}.apk
