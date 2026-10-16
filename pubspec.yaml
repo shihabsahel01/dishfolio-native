@@ -1,7 +1,7 @@
 name: dishfolio
 description: A pure AMOLED offline personal restaurant journal.
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.0.0+2
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
+  image_picker: ^1.0.7
 
 flutter:
   uses-material-design: true
